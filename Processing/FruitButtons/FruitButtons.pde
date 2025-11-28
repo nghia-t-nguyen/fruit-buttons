@@ -1,318 +1,230 @@
-//guthub commit test
 import processing.serial.*;
 import processing.video.*;
 import processing.sound.*;
+import com.barneycodes.spicytext.*;
 
+// --- GLOBAL VARIABLES ---
 Serial myPort;
-
-// sound files
-SoundFile backgroundMusic;
-SoundFile incorrectSound;
-SoundFile correctSound;
-
-// video files
-Movie toucanVideo;
-Movie capybaraVideo;
-Movie tortoiseVideo;
-
-// init variables for default image
-PImage toucanImage;
-PImage capybaraImage;
-PImage tortoiseImage;
-//init variables for image when user is incorrect
-PImage toucanImageIncorrect;
-PImage capybaraImageIncorrect;
-PImage tortoiseImageIncorrect;
-PImage animalImage;
-// booleans for which video is playing
-boolean playingToucanVideo = false;
-boolean playingCapybaraVideo = false;
-boolean playingTortoiseVideo = false;
-
-// game states
-final int STATE_SHOW_TOUCAN = 1; // state that displays toucan image
-final int STATE_PLAY_TOUCAN = 2; // state when toucan video is playing
-final int STATE_SHOW_CAPYBARA = 3; // state that displays capybara image
-final int STATE_PLAY_CAPYBARA = 4; // state when capybara video is playing
-final int STATE_SHOW_TORTOISE = 5; // state that displays tortoise image
-final int STATE_PLAY_TORTOISE = 6; // state when tortoise video is playing
-
-// init state to start off with toucan
-int state = STATE_SHOW_TOUCAN;
-
-// for incorrect message
-boolean showingIncorrect = false; // showing incorrect image flag used for timer
-int incorrectStartTime = 0;
-final int INCORRECT_DURATION = 3000; 
-boolean incorrectTriggered = false; // flag to play incorrect sound only once
-
-// font
+SoundFile backgroundMusic, incorrectSound, correctSound;
 PFont boldFont;
 
+// SpicyText objects and themes
+SpicyText titleText, hintText;
+SpicyTextTheme titleTheme, hintTheme;
+
+// Game State Management
+Animal currentAnimal;
+boolean isVideoPlaying = false;
+
+// Incorrect State Management
+String incorrectAnswer = "[EFFECT=BOUNCE]Hmm[END_EFFECT]...I think I'd like something else please!";
+boolean showingIncorrect = false;
+int incorrectStartTime = 0;
+final int INCORRECT_DURATION = 3000; 
+
+// --- ANIMAL CLASS ---
+class Animal {
+  PImage photo;
+  Movie video;
+  String title;
+  String hint;
+  char keyInput;    // Keyboard key (a, s, d)
+  char serialInput; // Serial input (1, 2, 3)
+  Animal next;      // Pointer to the next animal
+  
+  Animal(PApplet p, String imgPath, String vidPath, String t, String h, char k, char s) {
+    this.photo = p.loadImage(imgPath);
+    this.video = new Movie(p, vidPath);
+    this.title = t;
+    this.hint = h;
+    this.keyInput = k;
+    this.serialInput = s;
+  }
+}
+
 void setup() {
-  pixelDensity(1);
   fullScreen(JAVA2D);
-  noCursor(); // Hide cursor in fullscreen
-  
-  // Load the default images
-  toucanImage = loadImage("toucan2.jpg");
-  capybaraImage = loadImage("capybara2.jpg");
-  tortoiseImage = loadImage("tortoise2.jpg");
-  animalImage = toucanImage; // init the animalImage to the toucan
-  
-  // Load the images when user is incorrect
-  toucanImageIncorrect = loadImage("toucan3.jpg");
-  capybaraImageIncorrect = loadImage("capybara3.jpg");
-  tortoiseImageIncorrect = loadImage("tortoise3.jpg");
-  
-  // Load video files
-  toucanVideo = new Movie(this, "toucan.mp4");
-  capybaraVideo = new Movie(this, "capybara.mp4");
-  tortoiseVideo = new Movie(this, "tortoise.mp4");
+  pixelDensity(1);
+  noCursor();
   frameRate(30);
-  
-  boldFont = createFont("Arial Bold", 128); // set font
-  
-  // load music and sound files
+
+  // 1. Initialize Assets
+  boldFont = createFont("Arial Bold", 128);
   incorrectSound = new SoundFile(this, "incorrect.mp3");
   correctSound = new SoundFile(this, "correct.mp3");
   backgroundMusic = new SoundFile(this, "tropicalMusic.mp3");
-  backgroundMusic.loop();  // Loop the music continuously
+  backgroundMusic.loop();
   backgroundMusic.amp(0.3);
+
+  // 2. Initialize SpicyText Styles
+  titleTheme = new SpicyTextTheme();
+  titleTheme.textBackgroundMargin = 20; 
+  titleTheme.cornerRadius = 20; 
   
+  hintTheme = new SpicyTextTheme();
+  hintTheme.textBackgroundMargin = 80;
+  hintTheme.textColour = 255;
+  hintTheme.cornerRadius = 20; 
+
+  // 3. Create Animals
+  Animal toucan = new Animal(this, "toucan.jpg", "toucan.mp4", 
+    "[BACKGROUND=#FF7499FA]Mr. Toucan[END_BACKGROUND]", 
+    "I like to eat fruits that are small, [COLOUR=#FF7499FA]blue[END_COLOUR] and round. What should I eat?", 
+    'a', '1');
+
+  Animal capybara = new Animal(this, "capybara.jpg", "capybara.mp4", 
+    "[BACKGROUND=#FFFF9E00]Mrs. Capybara[END_BACKGROUND]", 
+    "I like to eat fruits that are round, [COLOUR=#FFFF9E00]orange[END_COLOUR] and football-shaped. What should I eat?", 
+    's', '2');
+
+  Animal tortoise = new Animal(this, "tortoise.jpg", "tortoise.mp4", 
+    "[BACKGROUND=#FFFC5252]Mr. Tortoise[END_BACKGROUND]", 
+    "I like to eat fruits that are soft, [COLOUR=#FFFC5252]red[END_COLOUR] and refreshing. What should I eat?", 
+    'd', '3');
+
+  // 4. Link Animals (Loop)
+  toucan.next = capybara;
+  capybara.next = tortoise;
+  tortoise.next = toucan;
+
+  // 5. Start Game
+  currentAnimal = toucan;
+  
+  // Init text objects
+  titleText = new SpicyText(this, currentAnimal.title, 50, titleTheme);
+  hintText = new SpicyText(this, currentAnimal.hint, 40, width-300, hintTheme);
+
   // Initialize Serial
-  //String portName = Serial.list()[0]; // Use first available port
-  //myPort = new Serial(this, portName, 9600); // Match Arduino
-  //myPort.bufferUntil('\n'); // Buffer string until newline character
+  // printArray(Serial.list());
+  // String portName = Serial.list()[0]; 
+  // myPort = new Serial(this, portName, 9600);
+  // myPort.bufferUntil('\n'); 
 }
 
 void draw() {
   background(0);
-  
-  if (state == STATE_SHOW_TOUCAN) {
-    displayAnimal(animalImage); // display animal image (toucan)
-    setIncorrectImage(toucanImageIncorrect, toucanImage); // changes to incorrect image if user is incorrect
-  } else if (state == STATE_PLAY_TOUCAN) {
-    // display toucan eating
-    if (toucanVideo.available()) {
-      toucanVideo.read();
-    }
-    image(toucanVideo, 0, 0, width, height);
-    
-    // display user is correct
-    fill(154, 205, 50);  // Yellow-green
-    textFont(boldFont);
-    textAlign(CENTER, CENTER);
-    text("Correct!", width/2, height - 120);
-    if (toucanVideo.time() >= toucanVideo.duration() - 0.05) {   // if the video is over
-      state = STATE_SHOW_CAPYBARA; // move on to next state
-      resetVideo();
-      animalImage = capybaraImage; // set image to capybara
-      incorrectTriggered = false;// reset image to the original (correct) image
-    }
-  } else if (state == STATE_SHOW_CAPYBARA) {
-    displayAnimal(animalImage); // display animal image (capybara)
-    setIncorrectImage(capybaraImageIncorrect, capybaraImage); // changes to incorrect image if user is incorrect
-  } else if (state == STATE_PLAY_CAPYBARA) {
-    // display capybara eating
-    if (capybaraVideo.available()) {
-      capybaraVideo.read();
-    }
-    
-    // display user is correct
-    image(capybaraVideo, 0, 0, width, height);
-    fill(154, 205, 50);  // Yellow-green
-    textFont(boldFont);
-    textAlign(CENTER, CENTER);
-    text("Correct!", width/2, height - 120);
-    if (capybaraVideo.time() >= capybaraVideo.duration() - 0.05) {   // if the video is over
-      state = STATE_SHOW_TORTOISE; // move on to the next state
-      resetVideo();
-      animalImage = tortoiseImage; // set image to tortoise
-      incorrectTriggered = false; // reset image to the original (correct) image
-    }
-  } else if (state == STATE_SHOW_TORTOISE) {
-    displayAnimal(animalImage); // display animal image (tortoise)
-    setIncorrectImage(tortoiseImageIncorrect, tortoiseImage); // changes to incorrect image if user is incorrect
-  } else if (state == STATE_PLAY_TORTOISE) {
-    // display tortoise eating
-    if (tortoiseVideo.available()) {
-      tortoiseVideo.read();
-    }
-    
-    // display user is correct
-    image(tortoiseVideo, 0, 0, width, height);
-    fill(154, 205, 50);  // Yellow-green
-    textFont(boldFont);
-    textAlign(CENTER, CENTER);
-    text("Correct!", width/2, height - 120);
-    if (tortoiseVideo.time() >= tortoiseVideo.duration() - 0.05) {   // if the video is over
-      state = STATE_SHOW_TOUCAN; // move on to the next state
-      resetVideo();
-      animalImage = toucanImage; // set image baack to toucan
-      incorrectTriggered = false; // reset image to the original (correct) image
-    }
+
+  if (isVideoPlaying) {
+    playVideoState();
+  } else {
+    showImageState();
+  }
+
+  // Handle incorrect message timer
+  if (showingIncorrect && millis() - incorrectStartTime >= INCORRECT_DURATION) {
+    showingIncorrect = false;
+    hintText.setText(currentAnimal.hint); // Restore hint
   }
 }
 
+// --- STATE FUNCTIONS ---
+
+void showImageState() {
+  displayAnimal(currentAnimal.photo);
+  
+  // UI Box
+  pushStyle();
+  rectMode(CENTER);
+  fill(#E6664C36);
+  stroke(#331C08);
+  strokeWeight(16);
+  rect(width/2, height-height/7, width-200, height/5, 20);
+  popStyle();
+
+  // Draw Text
+  hintText.draw(width/2, height-height/7, CENTER, CENTER);
+  titleText.draw(80, height-240);
+}
+
+void playVideoState() {
+  if (currentAnimal.video.available()) {
+    currentAnimal.video.read();
+  }
+  image(currentAnimal.video, 0, 0, width, height);
+
+  // "Correct!" Overlay
+  fill(154, 205, 50); 
+  textFont(boldFont);
+  textAlign(CENTER, CENTER);
+  text("Correct!", width/2, height - 120);
+
+  // Check if video finished
+  if (currentAnimal.video.time() >= currentAnimal.video.duration() - 0.05) {
+    finishVideo();
+  }
+}
+
+void finishVideo() {
+  // Stop current video
+  currentAnimal.video.stop();
+  currentAnimal.video.jump(0);
+  
+  // Switch to next animal
+  currentAnimal = currentAnimal.next;
+  
+  // Update text for next animal
+  titleText.setText(currentAnimal.title);
+  hintText.setText(currentAnimal.hint);
+  
+  isVideoPlaying = false;
+}
+
+// --- INPUT HANDLING ---
+
+void handleInput(char inputChar) {
+  // If video is already playing or incorrect message is showing, ignore input
+  if (isVideoPlaying || showingIncorrect) return;
+
+  // Check if input matches current animal's keys
+  if (inputChar == currentAnimal.keyInput || inputChar == Character.toUpperCase(currentAnimal.keyInput) || inputChar == currentAnimal.serialInput) {
+    // Correct!
+    correctSound.play();
+    currentAnimal.video.loop();
+    isVideoPlaying = true;
+    
+    // While video plays, pre-set the hint text for the *next* animal 
+    // (Or you can wait until finishVideo to update text, simpler to wait)
+    
+  } else {
+    // Incorrect!
+    triggerIncorrect();
+  }
+}
 
 void keyPressed() {
-  //// reset
-  //if (key == 'r' || key == 'R') {
-  //  resetVideo();
-  //  state = STATE_SHOW_TOUCAN;
-  //  return;
-  //}
-  
-  // toucan state
-  if (state == STATE_SHOW_TOUCAN) {
-    if (key == 'a' || key == 'A') { // if correct button
-      playingToucanVideo = true; // play toucan video
-      correctSound.play(); // play correct sound fx
-      toucanVideo.loop();
-      state = STATE_PLAY_TOUCAN; // change state to video playing
-      incorrectTriggered = false; // reset incorrect triggered flag
-    } else {
-      triggerIncorrect(); // if incorrect button, trigger incorrect image
-    }
-  }
-  
-  // capybara state
-  if (state == STATE_SHOW_CAPYBARA) {
-    if (key == 's' || key == 'S') { // if correct button
-      playingCapybaraVideo = true; // play capybara video
-      correctSound.play(); // play correct sound fx
-      capybaraVideo.loop();
-      state = STATE_PLAY_CAPYBARA; // change state to video playing
-      incorrectTriggered = false; // reset incorrect triggered flag
-    } else {
-      triggerIncorrect(); // if incorrect button, trigger incorrect image
-    }
-  }
-  
-  // tortoise state
-  if (state == STATE_SHOW_TORTOISE) {
-    if (key == 'd' || key == 'D') { // if correct button
-      playingTortoiseVideo = true; // play tortoise video
-      correctSound.play(); // play correct sound fx
-      tortoiseVideo.loop();
-      state = STATE_PLAY_TORTOISE; // chage state to video playing
-      incorrectTriggered = false; // reset incorrect triggered flag
-    } else {
-      triggerIncorrect(); // if incorrect button, trigger incorrect image
-    }
-  }
+  handleInput(key);
 }
-
 
 void serialEvent(Serial myPort) {
-  // Read the incoming string and trim whitespace
   String inString = myPort.readStringUntil('\n');
-  
   if (inString != null) {
-    inString = trim(inString); // Remove any whitespace/newline characters
-    
+    inString = trim(inString);
     if (inString.length() > 0) {
-      char key = inString.charAt(0); // Get first character
-      
-      // toucan state
-      if (state == STATE_SHOW_TOUCAN) {
-        if (key == '1') { // if correct button
-          playingToucanVideo = true; // play toucan video
-          correctSound.play(); // play correct sound fx
-          toucanVideo.loop();
-          state = STATE_PLAY_TOUCAN; // change state to video playing
-          incorrectTriggered = false; // reset incorrect triggered flag
-        } else {
-          triggerIncorrect(); // if incorrect button, trigger incorrect image
-        }
-      }
-      
-      // capybara state
-      if (state == STATE_SHOW_CAPYBARA) {
-        if (key == '2') { // if correct button
-          playingCapybaraVideo = true; // play capybara video
-          correctSound.play(); // play correct sound fx
-          capybaraVideo.loop();
-          state = STATE_PLAY_CAPYBARA; // change state to video playing
-          incorrectTriggered = false; // reset incorrect triggered flag
-        } else {
-          triggerIncorrect(); // if incorrect button, trigger incorrect image
-        }
-      }
-      
-      // tortoise state
-      if (state == STATE_SHOW_TORTOISE) {
-        if (key == '3') { // if correct button
-          playingTortoiseVideo = true; // play tortoise video
-          correctSound.play(); // play correct sound fx
-          tortoiseVideo.loop();
-          state = STATE_PLAY_TORTOISE; // chage state to video playing
-          incorrectTriggered = false; // reset incorrect triggered flag
-        } else {
-          triggerIncorrect(); // if incorrect button, trigger incorrect image
-        }
-      }
-   }
-  }
-
-}
-
-void resetVideo() {
-  // reset toucan video if playing
-  if (playingToucanVideo) {
-    playingToucanVideo = false;
-    toucanVideo.stop(); // stop
-    toucanVideo.jump(0); // rewind
-  }
-  // reset capybara video if playing
-  if (playingCapybaraVideo) {
-    playingCapybaraVideo = false;
-    capybaraVideo.stop(); // stop
-    capybaraVideo.jump(0); // rewind
-  }
-  // reset tortoise video if playing
-  if (playingTortoiseVideo) {
-    playingTortoiseVideo = false;
-    tortoiseVideo.stop(); // stop
-    tortoiseVideo.jump(0); // rewind
-  }
-}
-
-// displays animal photo centered and covered (with crop)
-void displayAnimal(PImage animalPhoto) {
-    imageMode(CENTER); // center image mode
-    float imgAspect = (float) animalPhoto.width / animalPhoto.height; // image aspect ratio
-    float windowAspect = (float)width / height; // window aspect ratio
-    
-    if (imgAspect < windowAspect) { // if window is winder
-      image(animalPhoto, width/2, height/2, width, width / imgAspect); // fit to width
-    } else { // if window is taller
-      image(animalPhoto, width/2, height/2, height * imgAspect, height); // fit to height
+      handleInput(inString.charAt(0));
     }
-
-    imageMode(CORNER); // reset image mode
+  }
 }
+
+// --- HELPERS ---
 
 void triggerIncorrect() {
-  if (!incorrectTriggered) {
-    incorrectTriggered = true;
+  if (!showingIncorrect) {
     showingIncorrect = true;
-    incorrectStartTime = millis(); // start timer for incorrect image
-    incorrectSound.play(); // play incorrect sound fx
+    incorrectStartTime = millis();
+    incorrectSound.play();
+    hintText.setText(incorrectAnswer);
   }
 }
 
-void setIncorrectImage(PImage animalPhotoIncorrect, PImage animalPhotoCorrect) {
-  if (showingIncorrect) {  
-    // set the image
-    animalImage = animalPhotoIncorrect;
-
-    // stop showing after a few seconds
-    if (millis() - incorrectStartTime > INCORRECT_DURATION) {
-      showingIncorrect = false;
-      animalImage = animalPhotoCorrect; // reset image to the original (correct) image
-      incorrectTriggered = false;
-    }
+void displayAnimal(PImage animalPhoto) {
+  imageMode(CENTER);
+  float imgAspect = (float) animalPhoto.width / animalPhoto.height;
+  float windowAspect = (float)width / height;
+  
+  if (imgAspect < windowAspect) {
+    image(animalPhoto, width/2, height/2, width, width / imgAspect);
+  } else {
+    image(animalPhoto, width/2, height/2, height * imgAspect, height);
   }
+  imageMode(CORNER);
 }
