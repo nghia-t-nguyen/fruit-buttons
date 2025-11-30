@@ -1,11 +1,8 @@
-
-const int buzzerPin = 7;
 const int buttonPin = 2; // Pin for the button
 const int buttonPin2 = 4;
 const int buttonPin3 = 8;
 
 void setup() {
-  pinMode(buzzerPin, OUTPUT);
   // Initialize the button pin as an input with an internal pull-up resistor.
   // The button should connect the pin to GND when pressed.
   pinMode(buttonPin, INPUT_PULLUP);
@@ -22,17 +19,12 @@ void loop() {
 
   // A LOW reading means the button is pressed (due to INPUT_PULLUP)
   if (buttonState == LOW) {
-    Serial.println("1");
-    tone(buzzerPin, 1000); 
+    Serial.println("2");
   }
   else if (buttonState2 == LOW) {
-    Serial.println("2");
-    tone(buzzerPin, 900); 
+    Serial.println("1"); 
   }
   else if (buttonState3 == LOW) {
     Serial.println("3");
-    tone(buzzerPin, 800); 
-  } else {
-    noTone(buzzerPin);
   }
 }
