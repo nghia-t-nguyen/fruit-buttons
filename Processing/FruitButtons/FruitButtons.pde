@@ -3,7 +3,7 @@ import processing.video.*;
 import processing.sound.*;
 import com.barneycodes.spicytext.*;
 
-// --- GLOBAL VARIABLES ---
+// Global variables
 Serial myPort;
 SoundFile backgroundMusic, incorrectSound, correctSound;
 PFont boldFont;
@@ -20,17 +20,24 @@ boolean isVideoPlaying = false;
 String incorrectAnswer = "[EFFECT=BOUNCE]Hmm[END_EFFECT]...I think I'd like something else please!";
 boolean showingIncorrect = false;
 int incorrectStartTime = 0;
-final int INCORRECT_DURATION = 3000; 
+final int INCORRECT_DURATION = 5000; 
 
-// --- ANIMAL CLASS ---
+// Animal class
+// photo: photo of the animal
+// video: video of animal if correct
+// title: titular name for the animal
+// hint: hint of the fruit
+// keyInput: keyboard input for testing purposes
+// serialInput: serial input for integration with Arduino
+// next: animal to display after correct input.
 class Animal {
   PImage photo;
   Movie video;
   String title;
   String hint;
-  char keyInput;    // Keyboard key (a, s, d)
-  char serialInput; // Serial input (1, 2, 3)
-  Animal next;      // Pointer to the next animal
+  char keyInput;
+  char serialInput;
+  Animal next;
   
   Animal(PApplet p, String imgPath, String vidPath, String t, String h, char k, char s) {
     this.photo = p.loadImage(imgPath);
@@ -49,7 +56,6 @@ void setup() {
   frameRate(30);
 
   // 1. Initialize Assets
-  boldFont = createFont("Arial Bold", 128);
   incorrectSound = new SoundFile(this, "incorrect.mp3");
   correctSound = new SoundFile(this, "correct.mp3");
   backgroundMusic = new SoundFile(this, "tropicalMusic.mp3");
@@ -74,12 +80,12 @@ void setup() {
 
   Animal capybara = new Animal(this, "capybara.jpg", "capybara.mp4", 
     "[BACKGROUND=#FFFF9E00]Mrs. Capybara[END_BACKGROUND]", 
-    "I like to eat fruits that are round, [COLOUR=#FFFF9E00]orange[END_COLOUR] and football-shaped. What should I eat?", 
+    "I like to eat fruits that are soft, [COLOUR=#FFFC5252]red[END_COLOUR] and refreshing. What should I eat?", 
     's', '2');
 
   Animal tortoise = new Animal(this, "tortoise.jpg", "tortoise.mp4", 
     "[BACKGROUND=#FFFC5252]Mr. Tortoise[END_BACKGROUND]", 
-    "I like to eat fruits that are soft, [COLOUR=#FFFC5252]red[END_COLOUR] and refreshing. What should I eat?", 
+    "I like to eat fruits that are round, [COLOUR=#FFFF9E00]orange[END_COLOUR] and football-shaped. What should I eat?", 
     'd', '3');
 
   // 4. Link Animals (Loop)
@@ -142,12 +148,6 @@ void playVideoState() {
   }
   image(currentAnimal.video, 0, 0, width, height);
 
-  // "Correct!" Overlay
-  fill(154, 205, 50); 
-  textFont(boldFont);
-  textAlign(CENTER, CENTER);
-  text("Correct!", width/2, height - 120);
-
   // Check if video finished
   if (currentAnimal.video.time() >= currentAnimal.video.duration() - 0.05) {
     finishVideo();
@@ -169,7 +169,7 @@ void finishVideo() {
   isVideoPlaying = false;
 }
 
-// --- INPUT HANDLING ---
+// =============== INPUT HANDLERS =================
 
 void handleInput(char inputChar) {
   // If video is already playing or incorrect message is showing, ignore input
@@ -179,7 +179,7 @@ void handleInput(char inputChar) {
   if (inputChar == currentAnimal.keyInput || inputChar == Character.toUpperCase(currentAnimal.keyInput) || inputChar == currentAnimal.serialInput) {
     // Correct!
     correctSound.play();
-    currentAnimal.video.loop();
+    currentAnimal.video.play();
     isVideoPlaying = true;
     
     // While video plays, pre-set the hint text for the *next* animal 
@@ -205,8 +205,7 @@ void serialEvent(Serial myPort) {
   }
 }
 
-// --- HELPERS ---
-
+// trigger incorrect
 void triggerIncorrect() {
   if (!showingIncorrect) {
     showingIncorrect = true;
